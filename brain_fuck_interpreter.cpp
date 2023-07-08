@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <stack>
 
 namespace brainfuck {
 
@@ -40,10 +41,10 @@ class Instruction {
             // ,:5
             case (','):
                 return INPUT_VAL;
-            // [,6
+            // [:6
             case ('['):
                 return JUMP_Z_F;
-            // ],7
+            // ]:7
             case (']'):
                 return JUMP_NZ_B;
             default:
@@ -62,7 +63,10 @@ class CodeMemory {
         code_segment_.push_back(code);
     }
     int fetch_one_code() {
-        return code_segment_[pc_pointer_++];
+        return code_segment_[pc_pointer_];
+    }
+    void increase_pc_pointer() {
+        pc_pointer_++;
     }
     int get_pc_pointer() {
         return pc_pointer_;
@@ -73,26 +77,40 @@ class CodeMemory {
     bool end() {
         return pc_pointer_ < 0 || pc_pointer_ >= code_segment_.size();
     }
-    int get_jump_position(int pos) {
-        return jump_map[pos];
+    int get_f_jump_position(int pos) {
+        return f_jump_map[pos];
+    }
+    int get_b_jump_position(int pos) {
+        return b_jump_map[pos];
     }
     void reset_pc_pointer() { pc_pointer_ = 0; }
     void record_jump() {
-        int i = 0, j = code_segment_.size() - 1;
-        while (i < j) {
-            if (code_segment_[i] == '[') {
-                while (code_segment_[j] != ']') {
-                    j--;
-                }
-                jump_map[i] = j;
+        std::stack<int> tmp;
+        for (int i = 0; i < code_segment_.size(); i++) {
+            if (code_segment_[i] == Instruction::JUMP_Z_F) {
+                tmp.push(i);
+            } else if (code_segment_[i] == Instruction::JUMP_NZ_B) {
+                // std::cout << "stk size:" << tmp.size();
+                int pos = tmp.top();
+                f_jump_map[pos] = i;
+                b_jump_map[i] = pos;
+                tmp.pop();
             }
         }
+        // std::cout << "record jump:\n";
+        // for (auto pair : f_jump_map) {
+        //     std::cout << "i,j:" << pair.first <<","<<pair.second<<"\n";
+        // }
+        // for (auto pair : b_jump_map) {
+        //     std::cout << "i,j:" << pair.first <<","<<pair.second<<"\n";
+        // }
     }
  
  private:
     int pc_pointer_ = -1;
     std::vector<int> code_segment_;
-    std::map<int, int> jump_map;
+    std::map<int, int> f_jump_map;
+    std::map<int, int> b_jump_map;
 };
 
 class StackMemory {
@@ -119,6 +137,7 @@ class StackMemory {
     void set(int val) {
         stack_segment_[stack_pointer_] = val;
     }
+    int get_pointer() { return stack_pointer_; }
  private:
     int stack_pointer_ = 0;
     std::vector<int> stack_segment_;
@@ -131,13 +150,18 @@ class Machine {
         code_mem_.reset_pc_pointer();
         while (!code_mem_.end()) {
             int code = code_mem_.fetch_one_code();
-            printf("code: %d\n", code);
+            // printf("code: %d\n", code);
+            // printf("code ptr: %d\n", code_mem_.get_pc_pointer());
+            // printf("Stk ptr: %d\n", stk_mem_.get_pointer());
             int pc, jump, ch;
+            bool do_jump = false;
             switch (code) {
                 case Instruction::INC_PTR:
+                // printf("Inc Stk Ptr\n");
                     stk_mem_.increase_pointer();
                     break;
                 case Instruction::DEC_PTR:
+                    // printf("Stk ptr: %d\n", stk_mem_.get_pointer());
                     stk_mem_.decrease_pointer();
                     break;
                 case Instruction::INC_VAL:
@@ -148,7 +172,8 @@ class Machine {
                     break;
                 case Instruction::OUTPUT_VAL:
                     ch = (char)stk_mem_.get();
-                    printf("Out:%d\n", ch);
+                    // printf("Stk ptr: %d\n", stk_mem_.get_pointer());
+                    printf("Out:%c\n", ch);
                     break;
                 case Instruction::INPUT_VAL:
                     break;
@@ -156,8 +181,9 @@ class Machine {
                 {
                     if (stk_mem_.get() == 0) {
                         pc = code_mem_.get_pc_pointer();
-                        jump = code_mem_.get_jump_position(pc);
+                        jump = code_mem_.get_f_jump_position(pc);
                         code_mem_.set_pointer_position(jump + 1);
+                        do_jump = true;
                     }
                     break;
                 }
@@ -165,12 +191,18 @@ class Machine {
                 {
                     if (stk_mem_.get() != 0) {
                         pc = code_mem_.get_pc_pointer();
-                        jump = code_mem_.get_jump_position(pc);
+                        jump = code_mem_.get_b_jump_position(pc);
+                        // std::cout << "pc,jump:" <<pc<<","<<jump << "\n";
                         code_mem_.set_pointer_position(jump + 1);
+                        do_jump = true;
                     }
                     break;
                 }
             }
+            if (!do_jump) {
+                code_mem_.increase_pc_pointer();
+            }
+            // sleep(1);
         }
     }
 
@@ -193,6 +225,7 @@ class Interpreter {
             std::cout << "read code::" << code << "\n";
             machine_->code_mem_.push_one_code(code);
         }
+        machine_->code_mem_.record_jump();
     }
  private:
     Machine* machine_;
@@ -202,7 +235,7 @@ class Interpreter {
 int main() {
     brainfuck::Machine machine;
     brainfuck::Interpreter interpreter(&machine);
-    std::string code = "++++.+.+.";
+    std::string code = "++>+++++[<+>-]++++++++[<++++++>-]<.";
     interpreter.interpret_from_string(code);
     machine.run();
 }
