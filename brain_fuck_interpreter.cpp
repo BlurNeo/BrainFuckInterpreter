@@ -58,6 +58,13 @@ class CodeMemory {
     CodeMemory() {
         code_segment_.reserve(1000);
     }
+    void reset() {
+        code_segment_.clear();
+        code_segment_.reserve(1000);
+        reset_pc_pointer();
+        f_jump_map.clear();
+        b_jump_map.clear();
+    }
     std::vector<int> & get_code_segment() { return code_segment_; }
     void push_one_code(int code) {
         code_segment_.push_back(code);
@@ -118,6 +125,11 @@ class StackMemory {
     StackMemory() {
         stack_segment_.resize(1000);
     }
+    void reset() {
+        stack_segment_.clear();
+        stack_segment_.resize(1000);
+        stack_pointer_ = 0;
+    }
     std::vector<int> & get_stack_segment() { return stack_segment_; }
     void increase_pointer() {
         stack_pointer_++;
@@ -146,6 +158,10 @@ class StackMemory {
 class Interpreter;
 class Machine {
  public:
+    void reset() {
+        code_mem_.reset();
+        stk_mem_.reset();
+    }
     void run() {
         code_mem_.reset_pc_pointer();
         while (!code_mem_.end()) {
@@ -173,7 +189,7 @@ class Machine {
                 case Instruction::OUTPUT_VAL:
                     ch = (char)stk_mem_.get();
                     // printf("Stk ptr: %d\n", stk_mem_.get_pointer());
-                    printf("Out:%c\n", ch);
+                    printf("%c", ch);
                     break;
                 case Instruction::INPUT_VAL:
                     break;
@@ -219,10 +235,11 @@ class Interpreter {
         return true;
     }
     void interpret_from_string(std::string_view code_str) {
+        machine_->reset();
         syntax_check(code_str);
         for (auto ch : code_str) {
             int code = Instruction::from_char(ch);
-            std::cout << "read code::" << code << "\n";
+            // std::cout << "read code::" << code << "\n";
             machine_->code_mem_.push_one_code(code);
         }
         machine_->code_mem_.record_jump();
@@ -235,7 +252,12 @@ class Interpreter {
 int main() {
     brainfuck::Machine machine;
     brainfuck::Interpreter interpreter(&machine);
-    std::string code = "++>+++++[<+>-]++++++++[<++++++>-]<.";
-    interpreter.interpret_from_string(code);
+    std::string code_add = "++>+++++[<+>-]++++++++[<++++++>-]<.";
+    std::string code_helloworld = "++++++++[>++++[>++>+++>+++>+<<<<-]>+>+>->>+[<]<-]>>.>---.+++++++..+++.>>.<-.<.+++.------.--------.>>+.>++.";
+    std::cout << "=========>2+5:\n";
+    interpreter.interpret_from_string(code_add);
+    machine.run();
+    std::cout << "\n=========>print helloworld:\n";
+    interpreter.interpret_from_string(code_helloworld);
     machine.run();
 }
